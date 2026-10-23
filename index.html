@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Attendance System</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:0}
+.header{padding:15px 25px;background:white;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
+.tabs button{padding:8px 18px;border-radius:20px;border:0;cursor:pointer;margin-left:5px;background:#e2e8f0;font-weight:bold}
+.tabs .active{background:#0f172a!important;color:white!important}
+.card{max-width:430px;margin:30px auto;background:white;border-radius:16px;box-shadow:0 8px 30px rgba(0,0,0,0.08);padding:22px;text-align:center}
+video{width:100%;border-radius:12px;background:#000;height:300px;object-fit:cover}
+.live{position:absolute;top:10px;left:10px;background:#ef4444;color:white;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:bold}
+.wrap{position:relative;margin-top:12px}
+.btn{width:100%;padding:13px;margin-top:14px;border-radius:12px;border:0;background:#0f172a;color:white;font-weight:bold;cursor:pointer;font-size:16px}
+.btn:disabled{opacity:0.6}
+.status{margin-top:16px;padding:16px;border-radius:12px;font-size:15px;font-weight:bold;display:none;line-height:1.6;text-align:left;word-break:break-word}
+.success{background:#dcfce7;color:#14532d;border:2px solid #4ade80}
+.error{background:#fee2e2;color:#7f1d1d;border:2px solid #f87171}
+.warn{background:#fef9c3;color:#713f12;border:2px solid #facc15}
+input,select{width:100%;padding:11px;margin-top:10px;border-radius:10px;border:1px solid #cbd5e1;box-sizing:border-box;font-size:14px}
+h3{margin:5px 0}
+</style>
+</head>
+<body>
+<div class="header">
+<div><b>🎓 Smart Attendance</b></div>
+<div class="tabs">
+<button id="tabReg" onclick="showTab('reg')">Register</button>
+<button id="tabAtt" class="active" onclick="showTab('att')">Attendance</button>
+</div>
+</div>
+
+<!-- REGISTER CARD -->
+<div id="regCard" class="card" style="display:none">
+<h3>Register Student</h3>
+<input id="r_roll" placeholder="Roll No eg 0508CS251039">
+<input id="r_name" placeholder="Full Name">
+<select id="r_role"><option>student</option><option>teacher</option></select>
+<select id="r_branch"><option>CSE</option><option>ECE</option><option>ME</option><option>EE</option></select>
+<select id="r_year"><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select>
+<div class="wrap"><video id="videoReg" autoplay muted playsinline></video><span class="live">● LIVE VERIFY</span></div>
+<button class="btn" onclick="registerStudent()">📸 Register Face</button>
+<div id="regStatus" class="status"></div>
+</div>
+
+<!-- ATTENDANCE CARD -->
+<div id="attCard" class="card">
+<h3>Mark Attendance</h3>
+<small style="color:#64748b">Live face + GPS verification</small>
+<div class="wrap"><video id="videoAtt" autoplay muted playsinline></video><span class="live">● LIVE VERIFY</span></div>
+
+<button id="attBtn" class="btn" onclick="markAttendance()">✅ Mark My Attendance</button>
+
+<!-- YEH DIV BUTTON KE DIRECT NEECHE HAI -->
+<div id="attStatus" class="status"></div>
+
+<small style="color:#94a3b8;display:block;margin-top:12px">📍 Locked: 23.1761, 77.4184 | 1 Day = 1 Attendance</small>
+<div style="margin-top:10px"><a href="http://127.0.0.1:8000/view-tables" target="_blank" style="color:#3b82f6;font-size:13px">View Tables</a></div>
+</div>
+
+<script>
+let stream;
+async function startCam(){
+ try{
+  stream=await navigator.mediaDevices.getUserMedia({video:true});
+  document.getElementById('videoReg').srcObject=stream;
+  document.getElementById('videoAtt').srcObject=stream;
+ }catch(e){alert("Camera allow karo: "+e.message)}
+}
+function showTab(t){
+ document.getElementById('regCard').style.display=t==='reg'?'block':'none';
+ document.getElementById('attCard').style.display=t==='att'?'block':'none';
+ document.getElementById('tabReg').classList.toggle('active',t==='reg');
+ document.getElementById('tabAtt').classList.toggle('active',t==='att');
+}
+async function registerStudent(){
+ const roll=document.getElementById('r_roll').value.trim();
+ const name=document.getElementById('r_name').value.trim();
+ const el=document.getElementById('regStatus');
+ if(!roll||!name){el.style.display='block';el.className='status error';el.innerHTML='❌ Roll No and Name likho';return;}
+ const video=document.getElementById('videoReg');
+ const canvas=document.createElement('canvas');
+ canvas.width=video.videoWidth||640; canvas.height=video.videoHeight||480;
+ canvas.getContext('2d').drawImage(video,0,0);
+ canvas.toBlob(async(blob)=>{
+  const fd=new FormData();
+  fd.append('rollno',roll);fd.append('name',name);
+  fd.append('role',document.getElementById('r_role').value);
+  fd.append('branch',document.getElementById('r_branch').value);
+  fd.append('year',document.getElementById('r_year').value);
+  fd.append('photo',blob,'reg.jpg');
+  el.style.display='block';el.className='status warn';el.innerHTML='⏳ Registering...';
+  try{
+   const res=await fetch('http://127.0.0.1:8000/register',{method:'POST',body:fd});
+   const data=await res.json();
+   if(data.error){el.className='status error';el.innerHTML='❌ '+data.error;}
+   else{el.className='status success';el.innerHTML='✅ Registered! Roll: '+data.rollno+'<br>Ab Attendance mark kar sakte ho';}
+  }catch(e){el.className='status error';el.innerHTML='❌ Server error: '+e.message;}
+ },'image/jpeg');
+}
+async function markAttendance(){
+ const btn=document.getElementById('attBtn');
+ const el=document.getElementById('attStatus');
+ btn.disabled=true; btn.innerText="⏳ Verifying...";
+ el.style.display='block'; el.className='status warn';
+ el.innerHTML="⏳ Checking face...";
+ const video=document.getElementById('videoAtt');
+ const canvas=document.createElement('canvas');
+ canvas.width=video.videoWidth||640; canvas.height=video.videoHeight||480;
+ canvas.getContext('2d').drawImage(video,0,0);
+ canvas.toBlob(async(blob)=>{
+  const fd=new FormData();
+  fd.append('file',blob,'att.jpg');
+  try{
+   const res=await fetch('http://127.0.0.1:8000/mark-attendance',{method:'POST',body:fd});
+   const data=await res.json();
+   console.log("RESPONSE:",data);
+   if(data.error){
+    el.className='status error';
+    el.innerHTML=`❌ ${data.error}<br><small>Hint: Pehle Register tab se register karo</small>`;
+   } else if(data.status==='Already Marked'){
+    el.className='status error';
+    el.innerHTML=`❌ <b>Error: Attendance Already Marked!</b><br><br>👤 Name: ${data.name}<br>🆔 Roll: ${data.rollno}<br>📚 Branch: ${data.branch}<br><br>⚠️ <b>1 Day = 1 Attendance Only</b><br>Today's attendance already done.<br>Please try tomorrow.`;
+   } else if(data.status==='Present'){
+    el.className='status success';
+    el.innerHTML=`✅ <b>Your attendance has been marked!</b><br><br>👤 Name: ${data.name}<br>🆔 Roll: ${data.rollno}<br>📚 Branch: ${data.branch}<br>⏰ Time: ${new Date().toLocaleString()}<br><br>Have a great day!`;
+   } else {
+    el.className='status error';
+    el.innerHTML=`❌ Unknown response: ${JSON.stringify(data)}`;
+   }
+  }catch(e){
+   el.className='status error';
+   el.innerHTML=`❌ Server error: ${e.message}<br>Check backend is running on port 8000`;
+  }
+  btn.disabled=false; btn.innerText="✅ Mark My Attendance";
+ },'image/jpeg');
+}
+startCam(); showTab('att');
+</script>
+</body>
+</html>
