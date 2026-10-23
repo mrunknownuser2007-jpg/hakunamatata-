@@ -1,0 +1,11 @@
+﻿venv/
+__pycache__/
+*.pyc
+dataset/
+face_db/
+student_photos/
+temp/
+downloads/
+*.exe
+*.zip
+.vscode/
